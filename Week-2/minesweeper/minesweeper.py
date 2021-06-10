@@ -105,27 +105,46 @@ class Sentence():
         """
         Returns the set of all cells in self.cells known to be mines.
         """
-        raise NotImplementedError
+        if len(self.cells) == self.count:
+            return self.cells
+        return set()
 
     def known_safes(self):
         """
         Returns the set of all cells in self.cells known to be safe.
         """
-        raise NotImplementedError
+        if self.count == 0:
+            return self.cells
+        return set()
 
     def mark_mine(self, cell):
         """
         Updates internal knowledge representation given the fact that
         a cell is known to be a mine.
         """
-        raise NotImplementedError
+        if cell in self.cells:
+            self.cells.remove(cell)
+            self.count -= 1
 
     def mark_safe(self, cell):
         """
         Updates internal knowledge representation given the fact that
         a cell is known to be safe.
         """
-        raise NotImplementedError
+        if cell in self.cells:
+            self.cells.remove(cell)
+
+    def get_inference(self, sentence):
+        """
+        Returns the inference between two sentence
+        if no inference return None
+        """
+        if self.cells.issubset(sentence.cells):
+            return Sentence(sentence.cells - self.cells, sentence.count - self.count)
+        elif sentence.cells.issubset(self.cells):
+            return Sentence(self.cells - sentence.cells, self.count - sentence.count)
+        else:
+            return None
 
 
 class MinesweeperAI():
@@ -182,7 +201,45 @@ class MinesweeperAI():
             5) add any new sentences to the AI's knowledge base
                if they can be inferred from existing knowledge
         """
-        raise NotImplementedError
+        self.moves_made.add(cell)
+        self.mark_safe(cell)
+
+        # a new sentence and its corresponding mines and safe
+        new_sentence = (Sentence(cells=self.get_neighbours(cell), count=count))
+
+        for mine in self.mines:
+            new_sentence.mark_mine(mine)
+        for safe in self.safes:
+            new_sentence.mark_safe(safe)
+
+        self.knowledge.append(new_sentence)
+
+        # mark additional safe and mines from knowledge
+        new_safes, new_mines = set(), set()
+
+        for sentence in self.knowledge:
+            for cell in sentence.known_mines():
+                new_mines.add(cell)
+            for cell in sentence.known_safes():
+                new_safes.add(cell)
+
+        for cell in new_mines:
+            self.mark_mine(cell)
+        for cell in new_safes:
+            self.mark_safe(cell)
+
+        # mark additional mines and safe from knowledge based on inference
+        new_knowledge = []
+        for sentenceA, sentenceB in itertools.combinations(self.knowledge, 2):
+            inference = sentenceA.get_inference(sentenceB)
+            if inference is not None and inference not in self.knowledge:
+                new_knowledge.append(inference)
+
+        self.knowledge.extend(new_knowledge)
+
+        for sentence in self.knowledge:
+            if sentence == Sentence(cells=set(), count=0):
+                self.knowledge.remove(sentence)
 
     def make_safe_move(self):
         """
@@ -193,7 +250,10 @@ class MinesweeperAI():
         This function may use the knowledge in self.mines, self.safes
         and self.moves_made, but should not modify any of those values.
         """
-        raise NotImplementedError
+        moves_left = self.safes - self.moves_made
+        if moves_left:
+            return random.choice(tuple(moves_left))
+        return None
 
     def make_random_move(self):
         """
@@ -202,4 +262,23 @@ class MinesweeperAI():
             1) have not already been chosen, and
             2) are not known to be mines
         """
-        raise NotImplementedError
+        moves_left = set(itertools.product(range(0, self.height), range(0, self.width)))
+        moves_left = moves_left - self.mines - self.moves_made
+        if moves_left:
+            return random.choice(tuple(moves_left))
+        return None
+
+    def get_neighbours(self, cell):
+        """
+        Returns a set of neighbours of the given cell
+        """""
+
+        neighbours = set()
+
+        for i in range(cell[0] - 1, cell[0] + 2):
+            for j in range(cell[1] - 1, cell[1] + 2):
+                if (i, j) == cell: continue
+                if 0 <= i < self.height and 0 <= j < self.width:
+                    neighbours.add((i,j))
+
+        return neighbours
